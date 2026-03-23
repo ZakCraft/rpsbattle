@@ -134,7 +134,7 @@ label{display:block;font-size:.8rem;color:var(--soft);margin-bottom:5px;text-tra
 <body>
 <div class="app">
   <h1>✊ RPS Battle 🌐</h1>
-  <p class="tagline">Real-time Rock Paper Scissors — play from anywhere!</p>
+  <p class="tagline">Two-player Rock Paper Scissors — open in 2 tabs to play!</p>
 
   <!-- ══ SCREEN: HOME ══ -->
   <div class="screen active" id="homeScreen">
@@ -249,10 +249,10 @@ label{display:block;font-size:.8rem;color:var(--soft);margin-bottom:5px;text-tra
 
 <script>
 // ══════════════════════════════════════════════════
-// CONFIG — Firebase Realtime Database (free tier)
-// Using a shared demo project — data auto-expires after 1 hour via Security Rules
+// LOCAL MULTIPLAYER — Uses BroadcastChannel + localStorage
+// Play in TWO browser tabs on the same device!
+// No internet connection needed 🎉
 // ══════════════════════════════════════════════════
-const DB = 'https://rps-battle-online-default-rtdb.firebaseio.com';
 
 // ── State ──
 let myRole   = null; // 'p1' or 'p2'
@@ -262,6 +262,7 @@ let gameState= {};
 let pollTimer= null;
 let roundNum = 1;
 let scores   = {p1:0, p2:0};
+let bc       = null; // BroadcastChannel
 
 const EMOJI = {rock:'✊', paper:'✋', scissors:'✌️'};
 const BEATS = {rock:'scissors', scissors:'paper', paper:'rock'};
@@ -287,37 +288,69 @@ function getName(){
   return n;
 }
 
-// ── Firebase REST API ──
+// ── Local "Database" using localStorage + BroadcastChannel ──
+function dbKey(path){ return 'rps_' + path.replace(/\//g,'_'); }
+
 async function dbSet(path, data){
   try {
-    const res = await fetch(`${DB}/${path}.json`, {
-      method:'PUT', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(data)
-    });
-    return res.ok;
+    localStorage.setItem(dbKey(path), JSON.stringify(data));
+    if(bc) bc.postMessage({ type:'update', path, data });
+    return true;
   } catch(e){ return false; }
 }
 
 async function dbPatch(path, data){
   try {
-    const res = await fetch(`${DB}/${path}.json`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(data)
-    });
-    return res.ok;
+    const existing = dbGetSync(path) || {};
+    // Deep merge one level
+    const merged = Object.assign({}, existing);
+    for(const k of Object.keys(data)){
+      if(k.includes('/')) {
+        // Handle nested paths like 'p1/move'
+        const parts = k.split('/');
+        if(!merged[parts[0]]) merged[parts[0]] = {};
+        merged[parts[0]][parts[1]] = data[k];
+      } else if(typeof data[k]==='object' && data[k]!==null && !Array.isArray(data[k])){
+        merged[k] = Object.assign({}, merged[k]||{}, data[k]);
+      } else {
+        merged[k] = data[k];
+      }
+    }
+    localStorage.setItem(dbKey(path), JSON.stringify(merged));
+    if(bc) bc.postMessage({ type:'update', path, data: merged });
+    return true;
   } catch(e){ return false; }
 }
 
-async function dbGet(path){
+function dbGetSync(path){
   try {
-    const res = await fetch(`${DB}/${path}.json`);
-    if(!res.ok) return null;
-    return await res.json();
+    const val = localStorage.getItem(dbKey(path));
+    return val ? JSON.parse(val) : null;
   } catch(e){ return null; }
 }
 
+async function dbGet(path){
+  return dbGetSync(path);
+}
+
 async function dbDelete(path){
-  try { await fetch(`${DB}/${path}.json`, {method:'DELETE'}); } catch(e){}
+  try {
+    localStorage.removeItem(dbKey(path));
+    if(bc) bc.postMessage({ type:'delete', path });
+  } catch(e){}
+}
+
+function setupChannel(code){
+  if(bc){ bc.close(); }
+  bc = new BroadcastChannel('rps_room_' + code);
+  bc.onmessage = (e) => {
+    // On receiving a message, trigger a poll immediately
+    if(e.data.type === 'update' && e.data.path){
+      localStorage.setItem(dbKey(e.data.path), JSON.stringify(e.data.data));
+    } else if(e.data.type === 'delete' && e.data.path){
+      localStorage.removeItem(dbKey(e.data.path));
+    }
+  };
 }
 
 // ── CREATE ROOM ──
@@ -329,6 +362,7 @@ async function createRoom(){
 
   roomCode = genCode();
   myRole = 'p1';
+  setupChannel(roomCode);
 
   const roomData = {
     p1: { name: myName, move: null },
@@ -359,6 +393,7 @@ async function joinRoom(){
   if(code.length < 4){ toast('⚠️ Enter a valid room code!'); return; }
 
   myName = name; roomCode = code; myRole = 'p2';
+  setupChannel(roomCode);
 
   toast('🔍 Looking for room…', 2000);
 
