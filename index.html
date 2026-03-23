@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rock Paper Scissors Online 🌐</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✊</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -134,7 +135,23 @@ label{display:block;font-size:.8rem;color:var(--soft);margin-bottom:5px;text-tra
 <body>
 <div class="app">
   <h1>✊ RPS Battle 🌐</h1>
-  <p class="tagline">Two-player Rock Paper Scissors — open in 2 tabs to play!</p>
+  <p class="tagline">Real-time Rock Paper Scissors — play with anyone online! 🌐</p>
+
+  <!-- ══ SCREEN: TOKEN SETUP ══ -->
+  <div class="screen active" id="tokenScreen">
+    <div class="card">
+      <h2>🔑 GitHub Token</h2>
+      <p style="font-size:.85rem;color:var(--soft);margin-bottom:14px;line-height:1.6">
+        This game saves rooms to your GitHub repo.<br>
+        You need a <strong style="color:#fff">Personal Access Token</strong> to play.<br><br>
+        👉 Go to <strong style="color:var(--draw)">GitHub → Settings → Developer Settings → Personal Access Tokens → Tokens (classic)</strong><br>
+        → Click <em>Generate new token</em> → tick <strong style="color:#fff">repo</strong> → copy the token!
+      </p>
+      <label for="tokenInput">Paste your token here</label>
+      <input type="text" id="tokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" style="font-size:.85rem;letter-spacing:.05em"/>
+    </div>
+    <button class="btn btn-accent" onclick="saveToken()">✅ Save & Play!</button>
+  </div>
 
   <!-- ══ SCREEN: HOME ══ -->
   <div class="screen active" id="homeScreen">
@@ -249,25 +266,44 @@ label{display:block;font-size:.8rem;color:var(--soft);margin-bottom:5px;text-tra
 
 <script>
 // ══════════════════════════════════════════════════
-// LOCAL MULTIPLAYER — Uses BroadcastChannel + localStorage
-// Play in TWO browser tabs on the same device!
-// No internet connection needed 🎉
+// CONFIG — GitHub Repo as Database
+// Rooms are stored as JSON files in:
+// https://github.com/zakcraft/rpsbattle/  (db/ folder)
 // ══════════════════════════════════════════════════
+const GH_OWNER  = 'zakcraft';
+const GH_REPO   = 'rpsbattle';
+const GH_BRANCH = 'main';
+const GH_API    = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/db`;
 
 // ── State ──
-let myRole   = null; // 'p1' or 'p2'
+let myRole   = null;
 let myName   = '';
 let roomCode = '';
 let gameState= {};
 let pollTimer= null;
 let roundNum = 1;
 let scores   = {p1:0, p2:0};
-let bc       = null; // BroadcastChannel
+let ghToken  = '';
 
 const EMOJI = {rock:'✊', paper:'✋', scissors:'✌️'};
 const BEATS = {rock:'scissors', scissors:'paper', paper:'rock'};
 const BEAT_MSG = {rock:'Rock crushes Scissors!', paper:'Paper covers Rock!', scissors:'Scissors cut Paper!'};
 const COLORS= ['#FF6B6B','#4ECDC4','#FFE66D','#a8dadc','#e94560','#06d6a0','#ffd166'];
+
+// ── Token helpers ──
+function saveToken(){
+  const t = document.getElementById('tokenInput').value.trim();
+  if(!t || t.length < 10){ toast('⚠️ Please paste a valid GitHub token!'); return; }
+  ghToken = t;
+  sessionStorage.setItem('rps_gh_token', t);
+  showScreen('homeScreen');
+  toast('✅ Token saved! Ready to play 🎮', 2000);
+}
+
+function loadToken(){
+  const t = sessionStorage.getItem('rps_gh_token');
+  if(t){ ghToken = t; showScreen('homeScreen'); }
+}
 
 // ── Helpers ──
 function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
@@ -288,69 +324,104 @@ function getName(){
   return n;
 }
 
-// ── Local "Database" using localStorage + BroadcastChannel ──
-function dbKey(path){ return 'rps_' + path.replace(/\//g,'_'); }
+// ── GitHub "Database" API ──
+// Each room is a file: db/ROOMCODE.json in the repo
 
-async function dbSet(path, data){
-  try {
-    localStorage.setItem(dbKey(path), JSON.stringify(data));
-    if(bc) bc.postMessage({ type:'update', path, data });
-    return true;
-  } catch(e){ return false; }
+async function ghHeaders(){
+  return {
+    'Authorization': `token ${ghToken}`,
+    'Content-Type': 'application/json',
+    'Accept': 'application/vnd.github.v3+json'
+  };
 }
 
-async function dbPatch(path, data){
+async function dbGet(roomCode){
   try {
-    const existing = dbGetSync(path) || {};
-    // Deep merge one level
-    const merged = Object.assign({}, existing);
-    for(const k of Object.keys(data)){
-      if(k.includes('/')) {
-        // Handle nested paths like 'p1/move'
-        const parts = k.split('/');
-        if(!merged[parts[0]]) merged[parts[0]] = {};
-        merged[parts[0]][parts[1]] = data[k];
-      } else if(typeof data[k]==='object' && data[k]!==null && !Array.isArray(data[k])){
-        merged[k] = Object.assign({}, merged[k]||{}, data[k]);
-      } else {
-        merged[k] = data[k];
-      }
-    }
-    localStorage.setItem(dbKey(path), JSON.stringify(merged));
-    if(bc) bc.postMessage({ type:'update', path, data: merged });
-    return true;
-  } catch(e){ return false; }
-}
-
-function dbGetSync(path){
-  try {
-    const val = localStorage.getItem(dbKey(path));
-    return val ? JSON.parse(val) : null;
+    const res = await fetch(`${GH_API}/${roomCode}.json?ref=${GH_BRANCH}&t=${Date.now()}`, {
+      headers: await ghHeaders(),
+      cache: 'no-store'
+    });
+    if(res.status === 404) return null;
+    if(!res.ok) return null;
+    const meta = await res.json();
+    const content = atob(meta.content.replace(/\n/g,''));
+    const data = JSON.parse(content);
+    data.__sha = meta.sha; // store sha for updates
+    return data;
   } catch(e){ return null; }
 }
 
-async function dbGet(path){
-  return dbGetSync(path);
-}
-
-async function dbDelete(path){
+async function dbSet(roomCode, data){
   try {
-    localStorage.removeItem(dbKey(path));
-    if(bc) bc.postMessage({ type:'delete', path });
-  } catch(e){}
+    // Check if file already exists (need sha to update)
+    const existing = await dbGet(roomCode);
+    const sha = existing ? existing.__sha : undefined;
+    const clean = Object.assign({}, data);
+    delete clean.__sha;
+
+    const body = {
+      message: `room ${roomCode} update`,
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(clean, null, 2)))),
+      branch: GH_BRANCH
+    };
+    if(sha) body.sha = sha;
+
+    const res = await fetch(`${GH_API}/${roomCode}.json`, {
+      method: 'PUT',
+      headers: await ghHeaders(),
+      body: JSON.stringify(body)
+    });
+    return res.ok || res.status === 201;
+  } catch(e){ return false; }
 }
 
-function setupChannel(code){
-  if(bc){ bc.close(); }
-  bc = new BroadcastChannel('rps_room_' + code);
-  bc.onmessage = (e) => {
-    // On receiving a message, trigger a poll immediately
-    if(e.data.type === 'update' && e.data.path){
-      localStorage.setItem(dbKey(e.data.path), JSON.stringify(e.data.data));
-    } else if(e.data.type === 'delete' && e.data.path){
-      localStorage.removeItem(dbKey(e.data.path));
+async function dbPatch(roomCode, patch){
+  try {
+    const existing = await dbGet(roomCode);
+    if(!existing) return false;
+    const sha = existing.__sha;
+    const merged = Object.assign({}, existing);
+    delete merged.__sha;
+
+    for(const k of Object.keys(patch)){
+      if(k.includes('/')){
+        const [a,b] = k.split('/');
+        if(!merged[a]) merged[a] = {};
+        merged[a][b] = patch[k];
+      } else if(typeof patch[k]==='object' && patch[k]!==null && !Array.isArray(patch[k])){
+        merged[k] = Object.assign({}, merged[k]||{}, patch[k]);
+      } else {
+        merged[k] = patch[k];
+      }
     }
-  };
+
+    const body = {
+      message: `room ${roomCode} patch`,
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(merged, null, 2)))),
+      branch: GH_BRANCH,
+      sha: sha
+    };
+
+    const res = await fetch(`${GH_API}/${roomCode}.json`, {
+      method: 'PUT',
+      headers: await ghHeaders(),
+      body: JSON.stringify(body)
+    });
+    return res.ok || res.status === 201;
+  } catch(e){ return false; }
+}
+
+async function dbDelete(roomCode){
+  try {
+    const existing = await dbGet(roomCode);
+    if(!existing) return;
+    const sha = existing.__sha;
+    await fetch(`${GH_API}/${roomCode}.json`, {
+      method: 'DELETE',
+      headers: await ghHeaders(),
+      body: JSON.stringify({ message: `delete room ${roomCode}`, sha, branch: GH_BRANCH })
+    });
+  } catch(e){}
 }
 
 // ── CREATE ROOM ──
@@ -362,7 +433,6 @@ async function createRoom(){
 
   roomCode = genCode();
   myRole = 'p1';
-  setupChannel(roomCode);
 
   const roomData = {
     p1: { name: myName, move: null },
@@ -373,10 +443,10 @@ async function createRoom(){
     created: Date.now()
   };
 
-  const ok = await dbSet(`rooms/${roomCode}`, roomData);
+  const ok = await dbSet(roomCode, roomData);
   btn.disabled = false; btn.textContent = '🎮 Create a New Game';
 
-  if(!ok){ toast('❌ Could not connect. Check your internet!', 3000); return; }
+  if(!ok){ toast('❌ Could not connect to GitHub. Check your token!', 3000); return; }
 
   document.getElementById('lobbyCode').textContent = roomCode;
   document.getElementById('slot1Name').textContent = myName;
@@ -393,16 +463,15 @@ async function joinRoom(){
   if(code.length < 4){ toast('⚠️ Enter a valid room code!'); return; }
 
   myName = name; roomCode = code; myRole = 'p2';
-  setupChannel(roomCode);
 
   toast('🔍 Looking for room…', 2000);
 
-  const room = await dbGet(`rooms/${roomCode}`);
+  const room = await dbGet(roomCode);
   if(!room){ toast('❌ Room not found! Check the code.', 3000); return; }
   if(room.status !== 'waiting'){ toast('❌ This room is already full!', 3000); return; }
 
   // Join the room
-  const ok = await dbPatch(`rooms/${roomCode}`, {
+  const ok = await dbPatch(roomCode, {
     p2: { name: myName, move: null },
     status: 'playing'
   });
@@ -418,7 +487,7 @@ async function joinRoom(){
 // ── CANCEL ROOM ──
 async function cancelRoom(){
   stopPolling();
-  await dbDelete(`rooms/${roomCode}`);
+  await dbDelete(roomCode);
   showScreen('homeScreen');
 }
 
@@ -455,18 +524,18 @@ async function pickMove(choice){
   document.getElementById('pickInstruction').style.display = 'none';
 
   // Store move — hidden from opponent (we only store a hash check; reveal happens when both ready)
-  await dbPatch(`rooms/${roomCode}/${myRole}`, { move: choice });
+  await dbPatch(roomCode, { [`${myRole}/move`]: choice });
 }
 
 // ── POLLING ──
 function startPolling(){
   stopPolling();
-  pollTimer = setInterval(poll, 1200);
+  pollTimer = setInterval(poll, 3000); // GitHub API: 3s interval
 }
 function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
 
 async function poll(){
-  const room = await dbGet(`rooms/${roomCode}`);
+  const room = await dbGet(roomCode);
   if(!room){ stopPolling(); toast('❌ Room closed!', 3000); showScreen('homeScreen'); return; }
 
   // Lobby: waiting for P2
@@ -571,7 +640,7 @@ function revealResult(room){
 
   // Only p1 updates the database (avoid race condition)
   if(myRole==='p1'){
-    dbPatch(`rooms/${roomCode}`, { scores: scores });
+    dbPatch(roomCode, { scores: scores });
   }
 
   // Show next round button
@@ -588,7 +657,7 @@ async function nextRound(){
   document.getElementById('nextRoundBtn').style.display = 'none';
 
   // Reset moves + bump round
-  await dbPatch(`rooms/${roomCode}`, {
+  await dbPatch(roomCode, {
     'p1/move': null,
     'p2/move': null,
     round: roundNum
@@ -607,7 +676,7 @@ function updateScores(){
 // ── LEAVE GAME ──
 async function leaveGame(){
   stopPolling(); stopMusic();
-  if(myRole==='p1') await dbDelete(`rooms/${roomCode}`);
+  if(myRole==='p1') await dbDelete(roomCode);
   showScreen('homeScreen');
 }
 
@@ -677,6 +746,10 @@ function playDrawMusic(){
 document.getElementById('playerNameInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('createBtn').click(); });
 document.getElementById('roomCodeInput').addEventListener('keydown',  e=>{ if(e.key==='Enter') joinRoom(); });
 document.getElementById('roomCodeInput').addEventListener('input', e=>{ e.target.value=e.target.value.toUpperCase(); });
+document.getElementById('tokenInput').addEventListener('keydown', e=>{ if(e.key==='Enter') saveToken(); });
+
+// Auto-load saved token
+loadToken();
 </script>
 </body>
 </html>
