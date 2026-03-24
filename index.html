@@ -51,6 +51,10 @@ label{display:block;font-size:.8rem;color:var(--soft);margin-bottom:5px;text-tra
 
 .btn-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;width:100%}
 
+.btn-cpu  {background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff}
+.btn-diff {background:var(--card2);border:2px solid var(--border);color:var(--soft);flex:1}
+.btn-diff:hover{border-color:var(--accent);color:#fff}
+
 /* ── ROOM CODE ── */
 .room-code-box{background:var(--card2);border:3px dashed var(--accent);border-radius:16px;padding:18px;text-align:center;width:100%}
 .room-code-box .label{font-size:.78rem;color:var(--soft);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
@@ -144,7 +148,28 @@ label{display:block;font-size:.8rem;color:var(--soft);margin-bottom:5px;text-tra
       <label for="playerNameInput">What's your name?</label>
       <input type="text" id="playerNameInput" placeholder="Enter your name..." maxlength="20" autocomplete="off"/>
     </div>
-    <button class="btn btn-accent" id="createBtn" onclick="createRoom()">🎮 Create a New Game</button>
+
+    <!-- vs Computer -->
+    <button class="btn btn-cpu" onclick="startVsComputer()">🤖 Play vs Computer</button>
+
+    <!-- Difficulty buttons (hidden until vs Computer is tapped) -->
+    <div id="difficultyPicker" style="display:none;width:100%;flex-direction:column;align-items:center;gap:10px">
+      <p style="font-size:.85rem;color:var(--soft);text-align:center">Choose difficulty:</p>
+      <div class="btn-row">
+        <button class="btn btn-diff" onclick="launchVsComputer('easy')">😊 Easy</button>
+        <button class="btn btn-diff" onclick="launchVsComputer('medium')">😐 Medium</button>
+        <button class="btn btn-diff" onclick="launchVsComputer('hard')">😈 Hard</button>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="hideDifficulty()">✕ Cancel</button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;width:100%;color:var(--soft);font-size:.85rem">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span>or play online</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    <button class="btn btn-accent" id="createBtn" onclick="createRoom()">🌐 Create Online Game</button>
     <div style="display:flex;align-items:center;gap:10px;width:100%;color:var(--soft);font-size:.85rem">
       <div style="flex:1;height:1px;background:var(--border)"></div>
       <span>or join one</span>
@@ -217,6 +242,7 @@ label{display:block;font-size:.8rem;color:var(--soft);margin-bottom:5px;text-tra
           <div class="waiting-dots" style="margin-top:8px"><span></span><span></span><span></span></div>
         </div>
       </div>
+      <button class="btn btn-ghost btn-sm" onclick="leaveGame()">🏠 Leave Game</button>
     </div>
 
     <!-- Result phase -->
@@ -253,8 +279,8 @@ label{display:block;font-size:.8rem;color:var(--soft);margin-bottom:5px;text-tra
 // CONFIG — Supabase (free real-time database)
 // No token needed by players — works for everyone!
 // ══════════════════════════════════════════════════
-const SB_URL  = 'https://fhzjkochckearwvjnjgp.supabase.co';   // 🔧 Replace with your Supabase project URL
-const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoemprb2NoY2tlYXJ3dmpuamdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMDI2NDUsImV4cCI6MjA4OTg3ODY0NX0.33PjYl5fYRUNt_h9Jca35IlijCaMYsw96HorLtzfTHc'; // 🔧 Replace with your anon/public key
+const SB_URL    = 'https://fhzjkochckearwvjnjgp.supabase.co';
+const SB_ANON   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoemprb2NoY2tlYXJ3dmpuamdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzMDI2NDUsImV4cCI6MjA4OTg3ODY0NX0.33PjYl5fYRUNt_h9Jca35IlijCaMYsw96HorLtzfTHc';
 const SB_HEADERS = {
   'apikey': SB_ANON,
   'Authorization': `Bearer ${SB_ANON}`,
@@ -275,6 +301,65 @@ const EMOJI = {rock:'✊', paper:'✋', scissors:'✌️'};
 const BEATS = {rock:'scissors', scissors:'paper', paper:'rock'};
 const BEAT_MSG = {rock:'Rock crushes Scissors!', paper:'Paper covers Rock!', scissors:'Scissors cut Paper!'};
 const COLORS= ['#FF6B6B','#4ECDC4','#FFE66D','#a8dadc','#e94560','#06d6a0','#ffd166'];
+let vsComputer = false;   // true when playing vs CPU
+let cpuDifficulty = 'medium';
+let playerMoveHistory = []; // for hard AI pattern tracking
+
+// ── VS COMPUTER ──
+function startVsComputer(){
+  const name = getName(); if(!name) return;
+  const picker = document.getElementById('difficultyPicker');
+  picker.style.display = picker.style.display === 'flex' ? 'none' : 'flex';
+}
+function hideDifficulty(){
+  document.getElementById('difficultyPicker').style.display = 'none';
+}
+
+function launchVsComputer(difficulty){
+  const name = getName(); if(!name) return;
+  myName = name;
+  vsComputer = true;
+  cpuDifficulty = difficulty;
+  myRole = 'p1';
+  roomCode = '';
+  roundNum = 1;
+  scores = {p1:0, p2:0};
+  playerMoveHistory = [];
+  document.getElementById('difficultyPicker').style.display = 'none';
+
+  const cpuName = difficulty === 'easy' ? '🤖 Rookie Bot' : difficulty === 'medium' ? '🤖 Smart Bot' : '🤖 Evil Bot';
+  document.getElementById('pickInstruction').textContent = '🤫 Pick your move!';
+  document.getElementById('pickedConfirm').style.display = 'none';
+  enterGameScreen(myName, cpuName);
+}
+
+function cpuPickMove(playerChoice){
+  const moves = ['rock','paper','scissors'];
+  if(cpuDifficulty === 'easy'){
+    // Fully random
+    return moves[Math.floor(Math.random()*3)];
+  } else if(cpuDifficulty === 'medium'){
+    // 60% random, 40% tries to beat the player's last move
+    if(playerMoveHistory.length > 0 && Math.random() < 0.4){
+      const lastMove = playerMoveHistory[playerMoveHistory.length-1];
+      // Pick the move that beats the player's last move
+      return Object.keys(BEATS).find(m => BEATS[m] === lastMove);
+    }
+    return moves[Math.floor(Math.random()*3)];
+  } else {
+    // Hard: uses the most common move in player's history to counter it
+    if(playerMoveHistory.length >= 2){
+      const freq = {rock:0,paper:0,scissors:0};
+      playerMoveHistory.forEach(m => freq[m]++);
+      const likelyMove = Object.keys(freq).sort((a,b)=>freq[b]-freq[a])[0];
+      // Counter that move with 75% chance
+      if(Math.random() < 0.75){
+        return Object.keys(BEATS).find(m => BEATS[m] === likelyMove);
+      }
+    }
+    return moves[Math.floor(Math.random()*3)];
+  }
+}
 
 // ── Supabase "Database" API ──
 // Each room is a row in the "rooms" table with column "code" as the unique key
@@ -357,6 +442,7 @@ function getName(){
 // ── CREATE ROOM ──
 async function createRoom(){
   const name = getName(); if(!name) return;
+  vsComputer = false;
   myName = name;
   const btn = document.getElementById('createBtn');
   btn.disabled = true; btn.textContent = '⏳ Creating…';
@@ -453,8 +539,20 @@ async function pickMove(choice){
   document.getElementById('pickedConfirm').style.display = 'block';
   document.getElementById('pickInstruction').style.display = 'none';
 
-  // Store move — hidden from opponent (we only store a hash check; reveal happens when both ready)
-  await dbPatch(roomCode, { [`${myRole}/move`]: choice });
+  if(vsComputer){
+    // CPU picks instantly (with tiny delay for drama)
+    playerMoveHistory.push(choice);
+    const cpuMove = cpuPickMove(choice);
+    const cpuName = document.getElementById('scoreN2').textContent;
+    setTimeout(()=>{
+      revealResult({
+        p1: { name: myName, move: choice },
+        p2: { name: cpuName, move: cpuMove }
+      });
+    }, 700);
+  } else {
+    await dbPatch(roomCode, { [`${myRole}/move`]: choice });
+  }
 }
 
 // ── POLLING ──
@@ -568,16 +666,16 @@ function revealResult(room){
   sub.textContent    = subText;
   updateScores();
 
-  // Only p1 updates the database (avoid race condition)
-  if(myRole==='p1'){
+  // Only p1 updates the database when playing online (avoid race condition)
+  if(!vsComputer && myRole==='p1'){
     dbPatch(roomCode, { scores: scores });
   }
 
   // Show next round button
   document.getElementById('nextRoundBtn').style.display = 'inline-block';
 
-  // Resume polling (to detect if opponent triggers next round)
-  startPolling();
+  // Resume polling only for online games
+  if(!vsComputer) startPolling();
 }
 
 // ── NEXT ROUND ──
@@ -585,17 +683,18 @@ async function nextRound(){
   stopMusic();
   roundNum++;
   document.getElementById('nextRoundBtn').style.display = 'none';
-
-  // Reset moves + bump round
-  await dbPatch(roomCode, {
-    'p1/move': null,
-    'p2/move': null,
-    round: roundNum
-  });
-
   document.getElementById('roundLabel').textContent = `Round ${roundNum}`;
+
+  if(!vsComputer){
+    await dbPatch(roomCode, {
+      'p1/move': null,
+      'p2/move': null,
+      round: roundNum
+    });
+    startPolling();
+  }
+
   showPickPhase();
-  startPolling();
 }
 
 function updateScores(){
@@ -606,7 +705,12 @@ function updateScores(){
 // ── LEAVE GAME ──
 async function leaveGame(){
   stopPolling(); stopMusic();
-  if(myRole==='p1') await dbDelete(roomCode);
+  if(!vsComputer){
+    // Both players delete the room so the other gets sent home too
+    await dbDelete(roomCode);
+  }
+  vsComputer = false;
+  playerMoveHistory = [];
   showScreen('homeScreen');
 }
 
