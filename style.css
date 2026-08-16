@@ -1,0 +1,132 @@
+:root {
+  --rock:#FF6B6B; --paper:#4ECDC4; --scissors:#FFE66D;
+  --bg:#1a1a2e; --card:#16213e; --card2:#1e2a4a; --accent:#e94560;
+  --win:#06d6a0; --lose:#ef476f; --draw:#ffd166;
+  --text:#fff; --soft:#a8dadc; --border:rgba(255,255,255,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(circle,#fff 1px,transparent 1px);background-size:60px 60px;opacity:.04;pointer-events:none}
+
+/* ── LAYOUT ── */
+.app{max-width:480px;margin:0 auto;padding:16px 16px 40px;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+
+h1{font-family:'Fredoka One',cursive;font-size:2.2rem;text-align:center;padding:18px 0 4px;background:linear-gradient(135deg,#FF6B6B,#FFE66D,#4ECDC4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:1px;width:100%}
+.tagline{text-align:center;color:var(--soft);font-size:.9rem;margin-bottom:24px}
+
+/* ── SCREENS ── */
+.screen{display:none;width:100%;flex-direction:column;align-items:center;gap:14px;animation:fadeIn .3s ease}
+.screen.active{display:flex}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── CARDS ── */
+.card{background:var(--card);border:2px solid var(--border);border-radius:20px;padding:22px 20px;width:100%}
+.card h2{font-family:'Fredoka One',cursive;font-size:1.3rem;margin-bottom:14px;color:var(--soft)}
+.card h3{font-family:'Fredoka One',cursive;font-size:1.1rem;margin-bottom:10px;color:var(--soft)}
+
+/* ── INPUTS ── */
+input[type=text]{width:100%;background:var(--card2);border:2px solid var(--border);border-radius:12px;padding:12px 16px;color:#fff;font-family:'Nunito',sans-serif;font-size:1rem;font-weight:600;outline:none;transition:border-color .2s}
+input[type=text]:focus{border-color:var(--accent)}
+input[type=text]::placeholder{color:#5a6a8a}
+label{display:block;font-size:.8rem;color:var(--soft);margin-bottom:5px;text-transform:uppercase;letter-spacing:.8px}
+
+/* ── BUTTONS ── */
+.btn{width:100%;font-family:'Fredoka One',cursive;font-size:1.1rem;border:none;border-radius:50px;padding:13px 20px;cursor:pointer;transition:transform .15s,box-shadow .15s,opacity .2s;letter-spacing:.5px}
+.btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-accent{background:linear-gradient(135deg,var(--accent),#c23152);color:#fff}
+.btn-teal  {background:linear-gradient(135deg,#4ECDC4,#2eb8af);color:#1a1a2e}
+.btn-ghost {background:transparent;border:2px solid var(--soft);color:var(--soft);width:auto;padding:10px 22px}
+.btn-sm    {font-size:.9rem;padding:9px 18px;width:auto}
+
+.btn-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;width:100%}
+
+.btn-cpu  {background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff}
+.btn-diff {background:var(--card2);border:2px solid var(--border);color:var(--soft);flex:1}
+.btn-diff:hover{border-color:var(--accent);color:#fff}
+
+/* ── ROOM CODE ── */
+.room-code-box{background:var(--card2);border:3px dashed var(--accent);border-radius:16px;padding:18px;text-align:center;width:100%}
+.room-code-box .label{font-size:.78rem;color:var(--soft);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.room-code-box .code{font-family:'Fredoka One',cursive;font-size:3rem;letter-spacing:.3em;color:#fff;text-shadow:0 0 20px rgba(233,69,96,.5)}
+.room-code-box .hint{font-size:.78rem;color:#5a6a8a;margin-top:6px}
+.copy-btn{font-family:'Fredoka One',cursive;font-size:.8rem;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:5px 12px;cursor:pointer;margin-top:8px;transition:opacity .2s}
+.copy-btn:hover{opacity:.85}
+
+/* ── QR CODE ── */
+.qr-box{background:var(--card2);border:2px solid var(--border);border-radius:16px;padding:16px;text-align:center;width:100%}
+.qr-box img{width:170px;height:170px;border-radius:10px;background:#fff;padding:8px;display:block;margin:0 auto}
+.qr-box .hint{font-size:.78rem;color:var(--soft);margin-top:8px}
+
+/* ── STATUS BADGE ── */
+.status-badge{display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:2px solid var(--border);border-radius:50px;padding:6px 14px;font-size:.82rem;color:var(--soft)}
+.dot{width:8px;height:8px;border-radius:50%;background:#5a6a8a}
+.dot.green{background:var(--win);box-shadow:0 0 8px var(--win);animation:pulse 1.5s infinite}
+.dot.orange{background:var(--draw);box-shadow:0 0 8px var(--draw);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── PLAYER SLOTS ── */
+.player-slots{display:flex;gap:10px;width:100%}
+.player-slot{flex:1;background:var(--card2);border:2px solid var(--border);border-radius:14px;padding:12px;text-align:center;transition:border-color .3s}
+.player-slot.joined{border-color:var(--win)}
+.player-slot .slot-label{font-size:.7rem;color:var(--soft);text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px}
+.player-slot .slot-name{font-family:'Fredoka One',cursive;font-size:1rem;color:#fff;min-height:1.3em}
+.player-slot .slot-status{font-size:.7rem;margin-top:3px}
+.player-slot.joined .slot-status{color:var(--win)}
+
+/* ── HAND CHOICE BUTTONS ── */
+.hand-choices{display:flex;justify-content:center;gap:12px;width:100%}
+.hand-btn{flex:1;max-width:110px;background:var(--card);border:3px solid var(--border);border-radius:18px;padding:14px 8px 10px;cursor:pointer;transition:transform .15s,border-color .2s,box-shadow .2s;display:flex;flex-direction:column;align-items:center;gap:6px;font-family:'Nunito',sans-serif}
+.hand-btn .emoji{font-size:2.8rem;line-height:1;filter:drop-shadow(0 3px 6px rgba(0,0,0,.3))}
+.hand-btn .name {font-family:'Fredoka One',cursive;font-size:.82rem;color:var(--soft)}
+.hand-btn:hover:not(:disabled){transform:scale(1.08) rotate(-2deg);box-shadow:0 8px 24px rgba(255,255,255,.1)}
+.hand-btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.hand-btn.selected{transform:scale(1.1);border-color:var(--win);box-shadow:0 0 0 3px rgba(6,214,160,.3)}
+.hand-btn[data-c="rock"]:hover:not(:disabled){border-color:var(--rock)}
+.hand-btn[data-c="paper"]:hover:not(:disabled){border-color:var(--paper)}
+.hand-btn[data-c="scissors"]:hover:not(:disabled){border-color:var(--scissors)}
+
+/* ── WAITING ANIMATION ── */
+.waiting-dots{display:flex;gap:6px;justify-content:center;margin:6px 0}
+.waiting-dots span{width:10px;height:10px;border-radius:50%;background:var(--soft);animation:bounce .8s infinite}
+.waiting-dots span:nth-child(2){animation-delay:.15s}
+.waiting-dots span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-8px);opacity:1}}
+
+/* ── RESULT ── */
+.result-area{width:100%;text-align:center}
+.hands-reveal{display:flex;justify-content:space-around;align-items:flex-end;gap:8px;margin:10px 0 16px}
+.reveal-side{text-align:center;flex:1}
+.reveal-side .rname{font-size:.75rem;text-transform:uppercase;letter-spacing:.8px;color:var(--soft);margin-bottom:6px}
+.reveal-side .remoji{font-size:5rem;line-height:1;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5));display:block}
+.reveal-side.winner .remoji{animation:bounce-win .6s ease 3}
+@keyframes bounce-win{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+.reveal-vs{font-family:'Fredoka One',cursive;font-size:1.5rem;color:var(--accent);padding-bottom:20px}
+.result-banner{font-family:'Fredoka One',cursive;font-size:2rem;margin:8px 0 4px}
+.result-banner.win {color:var(--win)}
+.result-banner.lose{color:var(--lose)}
+.result-banner.draw{color:var(--draw)}
+.result-sub{font-size:.9rem;color:var(--soft);margin-bottom:16px}
+
+/* ── SCORE ── */
+.score-row{display:flex;gap:10px;width:100%}
+.score-box{flex:1;background:var(--card2);border-radius:14px;padding:10px;text-align:center;border:2px solid var(--border)}
+.score-box .sname{font-size:.72rem;color:var(--soft);text-transform:uppercase;letter-spacing:.8px}
+.score-box .spts {font-family:'Fredoka One',cursive;font-size:2rem}
+.score-box.p1 .spts{color:var(--rock)}
+.score-box.p2 .spts{color:var(--paper)}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#222e50;border:2px solid var(--accent);border-radius:50px;padding:10px 22px;font-size:.9rem;font-weight:700;color:#fff;transition:transform .3s ease;z-index:9999;white-space:nowrap}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+/* ── CONFETTI ── */
+.conf-wrap{position:fixed;inset:0;pointer-events:none;z-index:999}
+.conf-piece{position:absolute;border-radius:2px;animation:confFall linear forwards}
+@keyframes confFall{0%{opacity:1;transform:translateY(-10px) rotate(0)}100%{opacity:0;transform:translateY(110vh) rotate(720deg)}}
+
+@media(max-width:380px){
+  .hand-btn .emoji{font-size:2.2rem}
+  .room-code-box .code{font-size:2.2rem}
+}

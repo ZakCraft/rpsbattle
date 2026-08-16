@@ -24,9 +24,9 @@ jobs:
       - name: Inject Supabase credentials into a deploy copy
         run: |
           mkdir -p dist
-          cp index.html dist/index.html
-          sed -i "s|__SUPABASE_URL__|${{ secrets.SUPABASE_RPS_URL }}|g" dist/index.html
-          sed -i "s|__SUPABASE_ANON_KEY__|${{ secrets.SUPABASE_RPS_ANON_KEY }}|g" dist/index.html
+          cp index.html style.css app.js dist/
+          sed -i "s|__SUPABASE_URL__|${{ secrets.SUPABASE_RPS_URL }}|g" dist/app.js
+          sed -i "s|__SUPABASE_ANON_KEY__|${{ secrets.SUPABASE_RPS_ANON_KEY }}|g" dist/app.js
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
